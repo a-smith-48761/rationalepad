@@ -8,5 +8,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     flex g++ g++-multilib gettext git gperf intltool libtool-bin \
     libgdk-pixbuf2.0-dev libssl-dev libxml-parser-perl lzip make ninja-build \
     p7zip-full patch perl pkg-config python3 python3-mako python3-packaging \
-    python3-pip python3-setuptools python3-six ruby sed unzip wget xz-utils zip \
+    python3-pip python3-setuptools python3-six python3-yaml python-is-python3 \
+    ruby sed unzip wget xz-utils zip libgl1-mesa-dev libegl1-mesa-dev \
+    libgles2-mesa-dev libopengl-dev libglvnd-dev \
     && rm -rf /var/lib/apt/lists/*
