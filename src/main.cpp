@@ -248,13 +248,13 @@ public:
         // Recompute cap whenever the central area changes size.
         central->installEventFilter(this);
 
-	// restore geometry if possible
-	const QByteArray geometry =
-	    settings_.value("window/geometry").toByteArray();
+	    // restore geometry if possible
+    	const QByteArray geometry =
+	        settings_.value("window/geometry").toByteArray();
 
-	if (!geometry.isEmpty()) {
-	    restoreGeometry(geometry);
-	}
+	    if (!geometry.isEmpty()) {
+	        restoreGeometry(geometry);
+    	}
 
         updateBottomCap();
     }
@@ -317,7 +317,7 @@ private:
             editor->setPlaceholderText("Write rationale for response "
                                        + QString::number(i + 1) + "…");
             editor->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-            tabs_->addTab(editor, QString("Response %1").arg((char)('A' + i)));
+            tabs_->addTab(editor, QString("[%1]").arg((char)('A' + i)));
             auto *highlighter = new MarkdownHighlighter(editor->document());
             if (!markdownEnabled_) highlighter->setDocument(nullptr);
             highlighters_.append(highlighter);
