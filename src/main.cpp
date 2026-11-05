@@ -32,6 +32,7 @@
 #include <QStringList>
 #include <QFile>
 #include <QResource>
+#include <QCloseEvent>
 #include <algorithm>
 #include <cmath>
 #include <ostream>
@@ -231,6 +232,15 @@ public:
 
         // Recompute cap whenever the central area changes size.
         central->installEventFilter(this);
+
+	// restore geometry if possible
+	const QByteArray geometry =
+	    settings_.value("window/geometry").toByteArray();
+
+	if (!geometry.isEmpty()) {
+	    restoreGeometry(geometry);
+	}
+
         updateBottomCap();
     }
 protected:
@@ -238,6 +248,10 @@ protected:
         if (obj == centralWidget() && event->type() == QEvent::Resize)
             QTimer::singleShot(0, this, [this] { updateBottomCap(); });
         return QMainWindow::eventFilter(obj, event);
+    }
+    void closeEvent(QCloseEvent *event) override {
+	settings_.setValue("window/geometry", saveGeometry());
+	    QMainWindow::closeEvent(event);
     }
 private:
     void loadTimerIconFont() {
