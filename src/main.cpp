@@ -30,8 +30,11 @@
 #include <QWidget>
 #include <QDebug>
 #include <QStringList>
+#include <QFile>
+#include <QResource>
 #include <algorithm>
 #include <cmath>
+#include <ostream>
 
 namespace {
 constexpr ushort kPlay = 0xf04b;
@@ -238,7 +241,13 @@ protected:
     }
 private:
     void loadTimerIconFont() {
-        const int id = QFontDatabase::addApplicationFont(":/fonts/fa-solid-900.otf");
+        QString fontFile = ":/fonts/fa-solid-900.otf";
+
+        const int id = QFontDatabase::addApplicationFont(fontFile);
+        if (id == -1) {
+            qDebug() << "Loading font from " << fontFile << " failed\n";
+            return;
+        }
         const QStringList families = QFontDatabase::applicationFontFamilies(id);
         if (!families.isEmpty()) {
             iconFont_ = QFont(families.first());

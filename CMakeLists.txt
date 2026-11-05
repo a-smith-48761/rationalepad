@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 qt_standard_project_setup()
 
+set(CMAKE_AUTORCC ON)
 
 qt_add_executable(RationalePad src/main.cpp resources/resources.qrc)
 target_link_libraries(RationalePad PRIVATE Qt6::Widgets Qt6::Sql)
