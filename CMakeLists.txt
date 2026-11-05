@@ -6,7 +6,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 qt_standard_project_setup()
 
 
-qt_add_executable(RationalePad src/main.cpp)
+qt_add_executable(RationalePad src/main.cpp resources/resources.qrc)
 target_link_libraries(RationalePad PRIVATE Qt6::Widgets Qt6::Sql)
 # set_target_properties(RationalePad PROPERTIES WIN32_EXECUTABLE TRUE)
 

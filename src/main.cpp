@@ -29,8 +29,16 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QDebug>
+#include <QStringList>
 #include <algorithm>
 #include <cmath>
+
+namespace {
+constexpr ushort kPlay = 0xf04b;
+constexpr ushort kPause = 0xf04c;
+constexpr ushort kReset = 0xf0e2;
+QString glyph(ushort codepoint) { return QString(QChar(codepoint)); }
+}
 
 class MarkdownHighlighter final : public QSyntaxHighlighter {
 public:
@@ -134,6 +142,7 @@ public:
     MainWindow() : settings_("RationalePad", "RationalePad") {
         setWindowTitle("RationalePad");
         resize(980, 720);
+        loadTimerIconFont();
 
         auto *central = new QWidget(this);
         auto *layout = new QVBoxLayout(central);
@@ -163,8 +172,10 @@ public:
         auto *other = new QPushButton("Other…", timerPanel);
         controls->addWidget(other);
         controls->addStretch(1);
-        pause_ = new QPushButton("Start", timerPanel);
-        reset_ = new QPushButton("Reset", timerPanel);
+        pause_ = new QPushButton(timerPanel);
+        reset_ = new QPushButton(timerPanel);
+        configureTimerButton(pause_);
+        configureTimerButton(reset_);
         controls->addWidget(pause_);
         controls->addWidget(reset_);
         timerLayout->addLayout(controls);
@@ -206,6 +217,7 @@ public:
         }
         refreshRecents();
         remainingMs_ = 25 * 60 * 1000LL;
+        refreshTimerButtons();
         updateClock();
 
         connect(other, &QPushButton::clicked, this, [this] { chooseCustomDuration(); });
@@ -225,6 +237,34 @@ protected:
         return QMainWindow::eventFilter(obj, event);
     }
 private:
+    void loadTimerIconFont() {
+        const int id = QFontDatabase::addApplicationFont(":/fonts/fa-solid-900.otf");
+        const QStringList families = QFontDatabase::applicationFontFamilies(id);
+        if (!families.isEmpty()) {
+            iconFont_ = QFont(families.first());
+            iconFont_.setPointSize(14);
+            hasIconFont_ = true;
+        }
+    }
+
+    void configureTimerButton(QPushButton *button) {
+        button->setFixedWidth(38);
+        button->setMinimumHeight(32);
+        if (hasIconFont_) button->setFont(iconFont_);
+    }
+
+    void refreshTimerButtons() {
+        const qint64 initialMs = static_cast<qint64>(selectedSeconds_) * 1000;
+        const QString action = running_ ? "Pause"
+            : (remainingMs_ > 0 && remainingMs_ != initialMs ? "Resume" : "Start");
+        pause_->setText(hasIconFont_ ? glyph(running_ ? kPause : kPlay) : action);
+        reset_->setText(hasIconFont_ ? glyph(kReset) : "Reset");
+        pause_->setToolTip(action);
+        pause_->setAccessibleName(action);
+        reset_->setToolTip("Reset timer");
+        reset_->setAccessibleName("Reset timer");
+    }
+
     void updateBottomCap() {
         if (!centralWidget()) return;
         // Percentage of space available for both editors after timer and labels.
@@ -254,7 +294,7 @@ private:
         running_ = true;
         elapsed_.start();
         tick_.start();
-        pause_->setText("Pause");
+        refreshTimerButtons();
         updateClock();
     }
     void chooseCustomDuration() {
@@ -283,22 +323,22 @@ private:
             remainingMs_ = std::max<qint64>(0, remainingMs_ - elapsed_.elapsed());
             running_ = false;
             tick_.stop();
-            pause_->setText("Resume");
         } else if (remainingMs_ > 0) {
             running_ = true;
             elapsed_.start();
             tick_.start();
-            pause_->setText("Pause");
         } else {
             startDuration(selectedSeconds_);
+            return;
         }
+        refreshTimerButtons();
         updateClock();
     }
     void resetTimer() {
         running_ = false;
         tick_.stop();
         remainingMs_ = static_cast<qint64>(selectedSeconds_) * 1000;
-        pause_->setText("Start");
+        refreshTimerButtons();
         updateClock();
     }
     void updateClock() {
@@ -308,7 +348,7 @@ private:
             running_ = false;
             remainingMs_ = 0;
             tick_.stop();
-            pause_->setText("Start");
+            refreshTimerButtons();
             QApplication::beep();
             statusBar()->showMessage("Time is up");
         }
@@ -324,6 +364,8 @@ private:
     QLabel *display_ = nullptr;
     QPushButton *pause_ = nullptr;
     QPushButton *reset_ = nullptr;
+    bool hasIconFont_ = false;
+    QFont iconFont_;
     QVector<QPushButton *> recentButtons_;
     QVector<int> recents_;
     QPlainTextEdit *mainEditor_ = nullptr;

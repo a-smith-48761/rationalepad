@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/fonts">
+    <file alias="fa-solid-900.otf">../assets/fonts/fa-solid-900.otf</file>
+  </qresource>
+</RCC>
