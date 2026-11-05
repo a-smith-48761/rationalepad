@@ -5,6 +5,9 @@
 #include <QResizeEvent>
 #include <QVector>
 #include <QCheckBox>
+#include <QButtonGroup>
+#include <QMessageBox>
+#include <QTabWidget>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QElapsedTimer>
@@ -185,13 +188,21 @@ public:
         timerLayout->addLayout(controls);
         layout->addWidget(timerPanel);
 
-        auto *topLabel = new QLabel("Main editor", central);
-        layout->addWidget(topLabel);
-        mainEditor_ = new QPlainTextEdit(central);
-        mainEditor_->setPlaceholderText("Start writing…");
-        mainEditor_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-        layout->addWidget(mainEditor_, 1);
-        highlighter_ = new MarkdownHighlighter(mainEditor_->document());
+        auto *rationaleHeader = new QHBoxLayout();
+        rationaleHeader->addWidget(new QLabel("Rationales", central));
+        rationaleHeader->addStretch();
+        auto *newTaskButton = new QPushButton("New Task…", central);
+        rationaleHeader->addWidget(newTaskButton);
+        layout->addLayout(rationaleHeader);
+
+        tabs_ = new QTabWidget(central);
+        tabs_->setDocumentMode(true);
+        tabs_->setMovable(false);
+        tabs_->setTabsClosable(false);
+        layout->addWidget(tabs_, 1);
+        createRationaleTabs(1);
+        connect(newTaskButton, &QPushButton::clicked, this,
+                [this] { newTaskDialog(); });
 
         auto *bottomLabel = new QLabel("Supporting notes", central);
         layout->addWidget(bottomLabel);
@@ -204,8 +215,12 @@ public:
         auto *markdownAction = view->addAction("&Markdown highlighting");
         markdownAction->setCheckable(true);
         markdownAction->setChecked(true);
-        connect(markdownAction, &QAction::toggled, highlighter_, [this](bool enabled) {
-            highlighter_->setDocument(enabled ? mainEditor_->document() : nullptr);
+        connect(markdownAction, &QAction::toggled, this, [this](bool enabled) {
+            markdownEnabled_ = enabled;
+            for (int i = 0; i < highlighters_.size(); ++i) {
+                auto *editor = qobject_cast<QPlainTextEdit *>(tabs_->widget(i));
+                highlighters_[i]->setDocument(enabled ? editor->document() : nullptr);
+            }
         });
         statusBar()->showMessage("RationalePad UI prototype — text is not saved yet");
 
@@ -288,10 +303,84 @@ private:
         reset_->setAccessibleName("Reset timer");
     }
 
+    void createRationaleTabs(int count) {
+        // Delete highlighters before their editor documents are destroyed.
+        for (auto *highlighter : highlighters_) delete highlighter;
+        highlighters_.clear();
+        while (tabs_->count() > 0) {
+            QWidget *page = tabs_->widget(0);
+            tabs_->removeTab(0);
+            delete page;
+        }
+        for (int i = 0; i < count; ++i) {
+            auto *editor = new QPlainTextEdit(tabs_);
+            editor->setPlaceholderText("Write rationale for response "
+                                       + QString::number(i + 1) + "…");
+            editor->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+            tabs_->addTab(editor, QString("Response %1").arg((char)('A' + i)));
+            auto *highlighter = new MarkdownHighlighter(editor->document());
+            if (!markdownEnabled_) highlighter->setDocument(nullptr);
+            highlighters_.append(highlighter);
+        }
+        tabs_->setCurrentIndex(0);
+    }
+
+    void newTaskDialog() {
+        QDialog dialog(this);
+        dialog.setWindowTitle("New task");
+        auto *dialogLayout = new QVBoxLayout(&dialog);
+        dialogLayout->addWidget(new QLabel("How many responses need rationales?", &dialog));
+
+        auto *numberRow = new QHBoxLayout();
+        auto *numbers = new QButtonGroup(&dialog);
+        numbers->setExclusive(true);
+        const int previous = qBound(1, settings_.value("task/responseCount", 1).toInt(), 9);
+        for (int count = 1; count <= 9; ++count) {
+            auto *button = new QPushButton(QString::number(count), &dialog);
+            button->setCheckable(true);
+            button->setFixedWidth(38);
+            button->setMinimumHeight(34);
+            numbers->addButton(button, count);
+            numberRow->addWidget(button);
+            button->setChecked(count == previous);
+        }
+        dialogLayout->addLayout(numberRow);
+
+        auto *actions = new QDialogButtonBox(QDialogButtonBox::Ok |
+                                            QDialogButtonBox::Cancel, &dialog);
+        actions->button(QDialogButtonBox::Ok)->setText("Create Task");
+        dialogLayout->addWidget(actions);
+        connect(actions, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(actions, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        if (dialog.exec() != QDialog::Accepted) return;
+
+        // There is no document persistence yet: confirm before discarding edits.
+        bool hasText = !bottom_->toPlainText().isEmpty();
+        for (int i = 0; i < tabs_->count(); ++i) {
+            auto *editor = qobject_cast<QPlainTextEdit *>(tabs_->widget(i));
+            if (editor && !editor->toPlainText().isEmpty()) hasText = true;
+        }
+        if (hasText && QMessageBox::warning(
+                this, "Discard current task?",
+                "Starting a new task will discard the current rationales and "
+                "supporting notes. They are not saved yet. Continue?",
+                QMessageBox::Discard | QMessageBox::Cancel,
+                QMessageBox::Cancel) != QMessageBox::Discard) return;
+
+        const int count = numbers->checkedId();
+        if (count < 1 || count > 9) return;
+        settings_.setValue("task/responseCount", count);
+        createRationaleTabs(count);
+        bottom_->clear();
+        statusBar()->showMessage(QString("New task: %1 response(s)").arg(count), 3000);
+        auto *first = qobject_cast<QPlainTextEdit *>(tabs_->widget(0));
+        if (first) first->setFocus();
+    }
+
     void updateBottomCap() {
         if (!centralWidget()) return;
         // Percentage of space available for both editors after timer and labels.
-        const int available = std::max(160, centralWidget()->height() - mainEditor_->y());
+        const int available = std::max(160, centralWidget()->height() - tabs_->y());
         bottom_->setHeightCap(static_cast<int>(available * 0.40));
     }
     static QString durationLabel(int seconds) {
@@ -391,9 +480,10 @@ private:
     QFont iconFont_;
     QVector<QPushButton *> recentButtons_;
     QVector<int> recents_;
-    QPlainTextEdit *mainEditor_ = nullptr;
+    QTabWidget *tabs_ = nullptr;
     AutoHeightEditor *bottom_ = nullptr;
-    MarkdownHighlighter *highlighter_ = nullptr;
+    QVector<MarkdownHighlighter *> highlighters_;
+    bool markdownEnabled_ = true;
     QTimer tick_;
     QElapsedTimer elapsed_;
     qint64 remainingMs_ = 0;
